@@ -1,0 +1,93 @@
+import { useEffect, useMemo, useState } from "react";
+
+type Word = {
+  start: number;
+  end: number;
+  text: string;
+};
+
+function getSentence(): Word[][] {
+  return [...Array(1000).keys()].map((i) =>
+    [...Array(20).keys()].map((j) => {
+      return {
+        start: (20 * i + j) / 4,
+        end: (20 * i + j + 1) / 4,
+        text: j.toString().padStart(4, "0"),
+      };
+    }),
+  );
+}
+
+function App() {
+  const sentence = useMemo(() => getSentence(), []);
+
+  return (
+    <main className="container mx-auto py-4">
+      <section className="relative">
+        <Cursor data={sentence} />
+        {sentence.map((s, id) => (
+          <SentenceComponent
+            key={`sentence-${id}`}
+            sentenceId={`${id}`}
+            sentence={s}
+          />
+        ))}
+      </section>
+    </main>
+  );
+}
+
+function Cursor({ data }: { data: Word[][] }) {
+  const [sentenceId, setSentenceId] = useState(0);
+  const [wordId, setWordId] = useState(0);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const newWordId = wordId + 1;
+      if (newWordId == data[sentenceId].length) {
+        setWordId(0);
+        setSentenceId(sentenceId + 1);
+        return;
+      }
+      setWordId(newWordId);
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const word = document.getElementById(`sentence-${sentenceId}-word-${wordId}`);
+  if (!word) return <></>;
+  const { top, left, right, bottom } = word.getBoundingClientRect();
+
+  return (
+    <div
+      className="absolute -z-10 -mx-1 transition-all duration-300 bg-indigo-300 rounded-md"
+      style={{ top, left, right, bottom }}
+    ></div>
+  );
+}
+
+function SentenceComponent({
+  sentenceId,
+  sentence,
+}: {
+  sentenceId: string;
+  sentence: Word[];
+}) {
+  return (
+    <div className="space-x-2">
+      {sentence.map((w, wordId) => (
+        <WordComponent
+          id={`sentence-${sentenceId}-word-${wordId}`}
+          key={`sentence-${sentenceId}-word-${wordId}`}
+          word={w}
+        />
+      ))}
+    </div>
+  );
+}
+
+function WordComponent({ word, id }: { word: Word; id: string }) {
+  return <span id={id}>{word.text}</span>;
+}
+
+export default App;
