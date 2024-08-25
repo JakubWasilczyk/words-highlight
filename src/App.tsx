@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { atom, useAtomValue } from "jotai";
 import { v4 } from "uuid";
 
 type Word = {
@@ -8,39 +8,70 @@ type Word = {
   text: string;
 };
 
-const sentence = [...Array(4000).keys()].map((i) =>
-  [...Array(20).keys()].map((j) => {
-    return {
-      uuid: v4(),
-      start: (20 * i + j) / 4,
-      end: (20 * i + j + 1) / 4,
-      text: j.toString().padStart(4, "0"),
-    };
-  }),
+const sentenceAtom = atom(
+  [...Array(4000).keys()].map((i) =>
+    [...Array(20).keys()].map((j) => {
+      return {
+        uuid: v4(),
+        start: (20 * i + j) / 4,
+        end: (20 * i + j + 1) / 4,
+        text: j.toString().padStart(4, "0"),
+      };
+    }),
+  ),
 );
+const wordsAtom = atom<Word[]>((get) => {
+  const sentences = get(sentenceAtom);
+  return sentences.flatMap((s) => s);
+});
 
-const useTimer = () => {
-  const [start, setStart] = useState(0);
-  const [timestamp, setTimestamp] = useState(0);
+const BUCKET_SIZE = 10;
+const timeBucketAtom = atom((get) => {
+  const words = get(wordsAtom);
+  const maxTime = words[words.length - 1].end;
 
-  useEffect(() => {
-    setStart(new Date().getTime());
-  }, [setStart]);
+  const bucketCount = Math.ceil(words.length / BUCKET_SIZE);
+  const timeInterval = Math.ceil(maxTime / bucketCount);
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setTimestamp((_) => (new Date().getTime() - start) / 1000);
-    }, 15);
-    return () => {
-      clearInterval(interval);
-    };
-  }, [start]);
+  const bucketIndexes = words.reduce(
+    (acc, curr, i) => {
+      const bucketIndex = Math.floor(curr.end / timeInterval);
+      if (!acc[bucketIndex]) {
+        acc[bucketIndex] = i;
+      }
+      return acc;
+    },
+    {} as Record<number, number>,
+  );
 
-  return { timestamp, start } as const;
+  return {
+    bucketIndexes,
+    timeInterval,
+  };
+});
+
+type Timestamp = {
+  timestamp: number;
+  start: number;
+};
+const timestampAtom = atom<Timestamp>({
+  timestamp: 0,
+  start: new Date().getTime(),
+});
+timestampAtom.onMount = (set) => {
+  const interval = setInterval(() => {
+    set(({ start }) => ({
+      timestamp: (new Date().getTime() - start) / 1000,
+      start,
+    }));
+  }, 15);
+  return () => {
+    clearInterval(interval);
+  };
 };
 
 const Timer = () => {
-  const { timestamp } = useTimer();
+  const { timestamp } = useAtomValue(timestampAtom);
 
   return (
     <div>
@@ -49,66 +80,36 @@ const Timer = () => {
   );
 };
 
-const BUCKET_SIZE = 3;
+const wordIndexAtom = atom((get) => {
+  const words = get(wordsAtom);
+  const { timestamp } = get(timestampAtom);
+  const { bucketIndexes, timeInterval } = get(timeBucketAtom);
+
+  const bucketIndex = Math.floor(timestamp / timeInterval);
+
+  const searchStartIndex = bucketIndexes[bucketIndex] - 1 || 0;
+  const searchEndIndex = (bucketIndexes[bucketIndex + 1] || words.length) + 1;
+
+  const wordIndex = words
+    .slice(searchStartIndex, searchEndIndex)
+    .findIndex((word) => {
+      return word.start <= timestamp && word.end >= timestamp;
+    });
+  if (wordIndex === -1) {
+    return -1;
+  }
+
+  return wordIndex + searchStartIndex;
+});
 
 const Highlighter = () => {
-  const { timestamp } = useTimer();
-  const words = useMemo(() => sentence, [sentence]);
-  //@ts-ignore
-  const flatWords: Word[] = useMemo(() => [].concat.apply([], words), [words]);
+  const words = useAtomValue(wordsAtom);
+  const index = useAtomValue(wordIndexAtom);
+  const word = document.getElementById(words[index]?.uuid);
 
-  const timeBucket = useMemo(() => {
-    const maxTime = flatWords[flatWords.length - 1].end;
-
-    const bucketCount = Math.ceil(flatWords.length / BUCKET_SIZE);
-    const timeInterval = Math.ceil(maxTime / bucketCount);
-
-    const bucketIndexes = flatWords.reduce(
-      (acc, curr, i) => {
-        const bucketIndex = Math.floor(curr.end / timeInterval);
-        if (!acc[bucketIndex]) {
-          acc[bucketIndex] = i;
-        }
-        return acc;
-      },
-      {} as Record<number, number>,
-    );
-
-    return {
-      bucketIndexes,
-      timeInterval,
-    };
-  }, [flatWords]);
-
-  const wordIndex = useMemo(() => {
-    const { bucketIndexes, timeInterval } = timeBucket;
-
-    const bucketIndex = Math.floor(timestamp / timeInterval);
-
-    const searchStartIndex = bucketIndexes[bucketIndex] - 1 || 0;
-    const searchEndIndex =
-      (bucketIndexes[bucketIndex + 1] || flatWords.length) + 1;
-
-    const wordIndex = flatWords
-      .slice(searchStartIndex, searchEndIndex)
-      .findIndex((word) => {
-        return word.start <= timestamp && word.end >= timestamp;
-      });
-    if (wordIndex === -1) {
-      return -1;
-    }
-
-    return wordIndex + searchStartIndex;
-  }, [timestamp, flatWords, timeBucket]);
-
-  const word = useMemo(
-    () => document.getElementById(flatWords[wordIndex]?.uuid),
-    [wordIndex],
-  );
   if (!word) {
     return null;
   }
-
   // Some easy padding to make it look a lil nicer
   const paddingHeight = 2;
   const paddingWidth = 3;
@@ -126,6 +127,7 @@ const Highlighter = () => {
 };
 
 function App() {
+  const sentence = useAtomValue(sentenceAtom);
   return (
     <main className="container mx-auto py-4">
       <Timer />
