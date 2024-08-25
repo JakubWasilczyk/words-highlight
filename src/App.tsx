@@ -1,4 +1,5 @@
-import { atom, useAtomValue } from "jotai";
+import { atom, useAtom, useAtomValue } from "jotai";
+import { useEffect, useState } from "react";
 import { v4 } from "uuid";
 
 type Word = {
@@ -9,7 +10,7 @@ type Word = {
 };
 
 const sentenceAtom = atom(
-  [...Array(4000).keys()].map((i) =>
+  [...Array(400).keys()].map((i) =>
     [...Array(40).keys()].map((j) => {
       return {
         uuid: v4(),
@@ -22,7 +23,8 @@ const sentenceAtom = atom(
 );
 const wordsAtom = atom<Word[]>((get) => {
   const sentences = get(sentenceAtom);
-  return sentences.flatMap((s) => s);
+  const words = sentences.flatMap((s) => s);
+  return words;
 });
 
 const BUCKET_SIZE = 10;
@@ -33,16 +35,13 @@ const timeBucketAtom = atom((get) => {
   const bucketCount = Math.ceil(words.length / BUCKET_SIZE);
   const timeInterval = Math.ceil(maxTime / bucketCount);
 
-  const bucketIndexes = words.reduce(
-    (acc, curr, i) => {
-      const bucketIndex = Math.floor(curr.end / timeInterval);
-      if (!acc[bucketIndex]) {
-        acc[bucketIndex] = i;
-      }
-      return acc;
-    },
-    {} as Record<number, number>,
-  );
+  const bucketIndexes = words.reduce((acc, curr, i) => {
+    const bucketIndex = Math.floor(curr.start / timeInterval);
+    if (!acc.get(bucketIndex)) {
+      acc.set(bucketIndex, i);
+    }
+    return acc;
+  }, new Map<number, number>());
 
   return {
     bucketIndexes,
@@ -80,23 +79,29 @@ const Timer = () => {
   );
 };
 
+// Dont derive this atom, it is used for caching
+const currentWordAtom = atom<Word | null>(null);
+
 const wordIndexAtom = atom((get) => {
   const words = get(wordsAtom);
+  const currentWord = get(currentWordAtom);
   const { timestamp } = get(timestampAtom);
   const { bucketIndexes, timeInterval } = get(timeBucketAtom);
 
+  if ((currentWord?.end || 0) >= timestamp) return null;
+
   const bucketIndex = Math.floor(timestamp / timeInterval);
 
-  const searchStartIndex = bucketIndexes[bucketIndex] - 1 || 0;
-  const searchEndIndex = (bucketIndexes[bucketIndex + 1] || words.length) + 1;
+  const bucketStartIndex = bucketIndexes.get(bucketIndex);
+  if (!bucketStartIndex) return null;
 
-  const wordIndex = words
-    .slice(searchStartIndex, searchEndIndex)
-    .findIndex((word) => {
-      return word.start <= timestamp && word.end >= timestamp;
-    });
+  const searchStartIndex = bucketStartIndex - 1 || 0;
+
+  const wordIndex = words.slice(searchStartIndex).findIndex((word) => {
+    return word.start <= timestamp && word.end >= timestamp;
+  });
   if (wordIndex === -1) {
-    return -1;
+    return null;
   }
 
   return wordIndex + searchStartIndex;
@@ -105,18 +110,39 @@ const wordIndexAtom = atom((get) => {
 const Highlighter = () => {
   const words = useAtomValue(wordsAtom);
   const index = useAtomValue(wordIndexAtom);
-  const word = document.getElementById(words[index]?.uuid);
+  const [word, setWord] = useAtom(currentWordAtom);
 
-  if (!word) {
+  // Caching with react useEffect, jotai-effect would be cleaner
+  const [previousIndex, setPreviousIndex] = useState(-1);
+  useEffect(() => {
+    if (index === null) {
+      return;
+    }
+    if (index !== previousIndex) {
+      setPreviousIndex(index);
+    }
+  }, [index, previousIndex]);
+
+  useEffect(() => {
+    if (index === null) {
+      return;
+    }
+    setWord(words[index]);
+  }, [index, words]);
+
+  const wordElement = document.getElementById(word?.uuid || "");
+
+  if (!wordElement) {
     return null;
   }
+
   // Some easy padding to make it look a lil nicer
   const paddingHeight = 2;
   const paddingWidth = 3;
-  const top = word.offsetTop - paddingHeight;
-  const left = word.offsetLeft - paddingWidth;
-  const width = word.offsetWidth + paddingWidth * 2;
-  const height = word.offsetHeight + paddingHeight * 2;
+  const top = wordElement.offsetTop - paddingHeight;
+  const left = wordElement.offsetLeft - paddingWidth;
+  const width = wordElement.offsetWidth + paddingWidth * 2;
+  const height = wordElement.offsetHeight + paddingHeight * 2;
 
   return (
     <div
