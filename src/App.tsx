@@ -69,18 +69,23 @@ timestampAtom.onMount = (set) => {
   };
 };
 
-const useResetTimer = () => {
+const useSetTimestamp = (word?: Word | null) => {
   const setTimestamp = useSetAtom(timestampAtom);
   const setCurrentWord = useSetAtom(currentWordAtom);
   return () => {
-    setTimestamp((prev) => ({ ...prev, start: new Date().getTime() }));
+    setTimestamp((prev) => ({
+      ...prev,
+      start: word?.start
+        ? new Date().getTime() - (word.end - (word.end - word.start)) * 1000
+        : new Date().getTime(),
+    }));
     setCurrentWord(null);
   };
 };
 
 const Timer = () => {
   const { timestamp } = useAtomValue(timestampAtom);
-  const resetTimer = useResetTimer();
+  const resetTimer = useSetTimestamp();
 
   return (
     <div className="flex justify-between border-gray-600 border-b pb-2 mb-4 items-center">
@@ -98,7 +103,7 @@ const Timer = () => {
 };
 
 // Dont derive this atom, it is used for caching
-const currentWordAtom = atom<Word | null>(null);
+const currentWordAtom = atom<Word | null | undefined>(null);
 
 const wordIndexAtom = atom((get) => {
   const words = get(wordsAtom);
@@ -202,5 +207,16 @@ function SentenceComponent({ sentence }: { sentence: Word[] }) {
 }
 
 function WordComponent({ word, id }: { word: Word; id: string }) {
-  return <span id={id}>{word.text}</span>;
+  const setTimestamp = useSetTimestamp(word);
+  return (
+    <span
+      id={id}
+      className="cursor-pointer hover:bg-gray-200 rounded px-1 py-0.5 transition-colors duration-200 ease-in-out"
+      onClick={() => {
+        setTimestamp();
+      }}
+    >
+      {word.text}
+    </span>
+  );
 }
