@@ -69,12 +69,30 @@ timestampAtom.onMount = (set) => {
   };
 };
 
+const useResetTimer = () => {
+  const setTimestamp = useSetAtom(timestampAtom);
+  const setCurrentWord = useSetAtom(currentWordAtom);
+  return () => {
+    setTimestamp((prev) => ({ ...prev, start: new Date().getTime() }));
+    setCurrentWord(null);
+  };
+};
+
 const Timer = () => {
   const { timestamp } = useAtomValue(timestampAtom);
+  const resetTimer = useResetTimer();
 
   return (
-    <div>
+    <div className="flex justify-between border-gray-600 border-b pb-2 mb-4 items-center">
       <div>Timestamp: {timestamp}</div>
+      <button
+        className="bg-blue-500 text-white px-4 py-2 rounded"
+        onClick={() => {
+          resetTimer();
+        }}
+      >
+        Reset
+      </button>
     </div>
   );
 };
