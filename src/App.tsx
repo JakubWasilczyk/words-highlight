@@ -10,12 +10,12 @@ type Word = {
 
 const sentenceAtom = atom(
   [...Array(4000).keys()].map((i) =>
-    [...Array(20).keys()].map((j) => {
+    [...Array(40).keys()].map((j) => {
       return {
         uuid: v4(),
-        start: (20 * i + j) / 4,
-        end: (20 * i + j + 1) / 4,
-        text: j.toString().padStart(4, "0"),
+        start: (40 * i + j) / 4,
+        end: (40 * i + j + 1) / 4,
+        text: j.toString().padStart(Math.random() * 7, "0"),
       };
     }),
   ),
@@ -113,10 +113,10 @@ const Highlighter = () => {
   // Some easy padding to make it look a lil nicer
   const paddingHeight = 2;
   const paddingWidth = 3;
-  const top = word?.offsetTop - paddingHeight;
-  const left = word?.offsetLeft - paddingWidth;
-  const width = word?.offsetWidth + paddingWidth * 2;
-  const height = word?.offsetHeight + paddingHeight * 2;
+  const top = word.offsetTop - paddingHeight;
+  const left = word.offsetLeft - paddingWidth;
+  const width = word.offsetWidth + paddingWidth * 2;
+  const height = word.offsetHeight + paddingHeight * 2;
 
   return (
     <div
@@ -144,7 +144,7 @@ export default App;
 
 function SentenceComponent({ sentence }: { sentence: Word[] }) {
   return (
-    <div className="space-x-2">
+    <div className="space-x-2 flex flex-wrap">
       {sentence.map((w) => (
         <WordComponent id={w.uuid} key={w.uuid} word={w} />
       ))}
