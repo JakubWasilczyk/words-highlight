@@ -127,8 +127,11 @@ const Highlighter = () => {
     if (index === null) {
       return;
     }
+    if (index === previousIndex) {
+      return;
+    }
     setWord(words[index]);
-  }, [index, words]);
+  }, [index, previousIndex, words]);
 
   const wordElement = document.getElementById(word?.uuid || "");
 
