@@ -1,4 +1,4 @@
-import { atom, useAtom, useAtomValue } from "jotai";
+import { atom, useAtomValue, useSetAtom } from "jotai";
 import { useEffect, useState } from "react";
 import { v4 } from "uuid";
 
@@ -10,7 +10,7 @@ type Word = {
 };
 
 const sentenceAtom = atom(
-  [...Array(400).keys()].map((i) =>
+  [...Array(2000).keys()].map((i) =>
     [...Array(40).keys()].map((j) => {
       return {
         uuid: v4(),
@@ -110,7 +110,7 @@ const wordIndexAtom = atom((get) => {
 const Highlighter = () => {
   const words = useAtomValue(wordsAtom);
   const index = useAtomValue(wordIndexAtom);
-  const [word, setWord] = useAtom(currentWordAtom);
+  const setWord = useSetAtom(currentWordAtom);
 
   // Caching with react useEffect, jotai-effect would be cleaner
   const [previousIndex, setPreviousIndex] = useState(-1);
@@ -133,7 +133,9 @@ const Highlighter = () => {
     setWord(words[index]);
   }, [index, previousIndex, words]);
 
-  const wordElement = document.getElementById(word?.uuid || "");
+  const wordElement = document.getElementById(
+    words[index ?? previousIndex]?.uuid || "",
+  );
 
   if (!wordElement) {
     return null;
